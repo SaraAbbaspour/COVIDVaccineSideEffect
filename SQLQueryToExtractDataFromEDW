@@ -1,0 +1,57 @@
+import pandas as pd
+import pyodbc
+
+### SERVER ACCESS
+conn_str = ('DRIVER={SQL Server};'
+            'SERVER=;'
+            'database=;')
+conn = pyodbc.connect(conn_str)
+
+cursor = conn.cursor()
+
+# In[1]:
+sql = """
+SELECT DISTINCT 
+	t1.[EMPI]
+    ,t1.[EpicPatientID]
+	,t1.[FirstImmunizationAgeNBR] as Age
+	,t1.[SexDSC] as Sex
+    ,t1.[RaceGrouperDSC] as Race
+    ,t1.[EthnicityGrouperDSC] as Ethnicity
+    ,t1.[FirstImmunizationNM]
+    ,t1.[FirstImmunizationID]
+	,t1.[FirstImmDepartmentNM]
+    ,t1.[FirstImmParentLocationNM]
+	,t1.[FirstDoseApptParentDSC]
+    ,t1.[FirstDoseDepartmentDSC]
+	,YEAR(t1.FirstImmunizationDTS) AS FirstImmunizationYear
+	,MONTH(t1.FirstImmunizationDTS) AS FirstImmunizationMonth
+	,cast(t1.FirstImmunizationDTS as time) AS FirstImmunizationTime
+	,YEAR(t1.FirstDoseAppointmentDTS) AS FirstDoseAppointmentYear
+	,MONTH(t1.FirstDoseAppointmentDTS) AS FirstDoseAppointmentMonth
+	,cast(t1.FirstDoseAppointmentDTS as time) AS FirstDoseAppointmentTime
+	--,DATEDIFF(HOUR,t1.[FirstImmunizationDTS], t1.[FirstDoseAppointmentDTS]) as TimeDiffAppoImmu_1
+	,t1.[SecondImmunizationNM]
+    ,t1.[SecondImmunizationID]
+    ,t1.[SecondImmDepartmentNM]
+    ,t1.[SecondImmParentLocationNM]
+	,t1.[SecondDoseApptParentDSC]
+    ,t1.[SecondDoseDepartmentDSC]
+	,DATEDIFF(DAY, t1.[FirstImmunizationDTS], t1.SecondImmunizationDTS) as SecondImmunizationRelativeDay
+	,cast(t1.SecondImmunizationDTS as time) AS SecondImmunizationTime
+	,DATEDIFF(DAY, t1.[FirstDoseAppointmentDTS], t1.[SecondDoseAppointmentDTS]) as SecondDoseAppointmentRelativeDay
+	,cast(t1.[SecondDoseAppointmentDTS] as time) AS SecondDoseAppointmentTime
+	--,DATEDIFF(HOUR,t1.[SecondImmunizationDTS], t1.[SecondDoseAppointmentDTS]) as TimeDiffAppoImmu_2
+	,t1.[SecondImmAdministeredStatusDSC]
+    ,t1.[VaccinationStatusDSC]
+FROM
+	[COVID19_VaccineRegistry].[COVIDImmunization].[VaccinePatient] t1
+	left join [COVID19_Mart].[Analytics].[AllCOVIDPositive] t2 on (t2.[EpicPatientID] = t1.[EpicPatientID])
+WHERE
+	t1.[FirstImmAdministeredStatusDSC] in ('Given')
+	and (convert(time,t1.FirstImmunizationDTS)<>'00:00:00.0000000' or  convert(time,t1.[FirstDoseAppointmentDTS])<>'00:00:00.0000000')
+ORDER BY t1.[EpicPatientID]
+  """
+# In[2]:
+VaccinePatient_Everything = pd.read_sql_query(sql, con=conn)
+# VaccinePatient_Everything.to_csv (r'VaccinePatient.csv', index = False, header=True)

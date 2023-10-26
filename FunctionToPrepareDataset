@@ -1,0 +1,174 @@
+# importing functions from libraries
+import sys
+sys.dont_write_bytecode = True  # to Avoid .pyc Files
+import pandas as pd
+import datetime
+
+def PrepareDose1Dataset (CovidData):
+    # In[]: removing participants that there is no information about their immunization location/hospital
+    # DepartmentNM = pd.read_csv('C:/Users/srabb/Dropbox (Partners HealthCare)/MGH COVID vaccine side effects/Data/DataToBeUsedForML/DepartmentNM.csv')
+    DepartmentNM = ['BWF','BWH','BWP','CDH','CMG','CP','MCL','MEE','MGH','MGN','MGP','MVH','NCH','NSC','NSM','NSP','NWC','NWH','PCG','PUC',
+                    'SCC','SHC','SRH','WDH','WHP','ZMEE']
+    CovidData['DepartmentNM'] = CovidData.FirstDoseDepartmentNM.isin(DepartmentNM)
+    CovidData = CovidData[CovidData.DepartmentNM == True]
+    CovidData_ToBeUsed = CovidData.reset_index(drop=True)
+    
+    # In[]: Age to 3 groups (18-40, 41-60 and >60)
+    AgeGroup1 = 18
+    AgeGroup2 = 41
+    AgeGroup3 = 61
+    DummyAge = pd.DataFrame(index=range(len(CovidData_ToBeUsed)), columns=['AgeGroup1','AgeGroup2','AgeGroup3'])
+    for i in range(len(CovidData_ToBeUsed)):
+        Age_ = CovidData_ToBeUsed.loc[i]['Age']
+        if Age_ < AgeGroup2 and Age_ >= AgeGroup1:
+            DummyAge.loc[i]['AgeGroup1'] = 1
+        else:
+            DummyAge.loc[i]['AgeGroup1'] = 0
+        if Age_>= AgeGroup2  and Age_ < AgeGroup3:
+            DummyAge.loc[i]['AgeGroup2'] = 1
+        else:
+            DummyAge.loc[i]['AgeGroup2'] = 0
+        if Age_>= AgeGroup3:
+            DummyAge.loc[i]['AgeGroup3'] = 1
+        else:
+            DummyAge.loc[i]['AgeGroup3'] = 0
+    DummyAge['AgeCheck'] = DummyAge.sum(axis=1)
+    CovidData_ToBeUsed = pd.concat([CovidData_ToBeUsed, DummyAge], axis=1, ignore_index=False)
+    CovidData_ToBeUsed = CovidData_ToBeUsed[CovidData_ToBeUsed.AgeCheck == 1]
+    CovidData_ToBeUsed = CovidData_ToBeUsed.reset_index(drop=True)
+    
+    # In[]: Sex
+    CovidData_ToBeUsed['Sex_Female'] = 2
+    CovidData_ToBeUsed.Sex_Female[CovidData_ToBeUsed.Sex != 'Female'] = 0
+    CovidData_ToBeUsed.Sex_Female[CovidData_ToBeUsed.Sex == 'Female'] = 1
+    CovidData_ToBeUsed['Sex_Male'] = 2
+    CovidData_ToBeUsed.Sex_Male[CovidData_ToBeUsed.Sex != 'Male'] = 0
+    CovidData_ToBeUsed.Sex_Male[CovidData_ToBeUsed.Sex == 'Male'] = 1
+    
+    # In[]: race and ethnicity (White – NonHispanic, Non-White (Asian,Black,OtherRace) – non-Hispanic, Any race – Hispanic, Any race – OtherEthnicity )
+    # CovidData_ = CovidData[CovidData.Ethnicity == 'Unknown/Missing']
+    RaceGroup = ['Asian', 'White', 'Black', 'OtherRace']
+    EthnicityGroup = ['Non Hispanic', 'OtherEthnicity', 'Hispanic']
+    CovidData_ToBeUsed.Race[CovidData_ToBeUsed.Race == 'Unknown/Missing'] = 'OtherRace'
+    CovidData_ToBeUsed.Race[CovidData_ToBeUsed.Race == 'Other'] = 'OtherRace'
+    CovidData_ToBeUsed.Race[CovidData_ToBeUsed.Race == 'Two or More'] = 'OtherRace'
+    CovidData_ToBeUsed.Race[CovidData_ToBeUsed.Race == 'Declined'] = 'OtherRace'
+    CovidData_ToBeUsed.Race[CovidData_ToBeUsed.Race == 'American Indian or Alaska Native'] = 'OtherRace'
+    CovidData_ToBeUsed.Race[CovidData_ToBeUsed.Race == 'Native Hawaiian or Other Pacific Islander'] = 'OtherRace'
+    CovidData_ToBeUsed.Ethnicity[CovidData_ToBeUsed.Ethnicity == 'Unknown/Missing'] = 'OtherEthnicity'
+    CovidData_ToBeUsed.Ethnicity[CovidData_ToBeUsed.Ethnicity == 'Declined'] = 'OtherEthnicity'
+    RaceEthnicity = pd.DataFrame(index=range(len(CovidData_ToBeUsed)), columns=['WhiteNonHispanic','NonWhiteNonHispanic','AnyRaceHispanic','AnyRaceOtherEthnicity'])
+    for i in range(len(CovidData_ToBeUsed)):
+        if CovidData_ToBeUsed.Race.loc[i] == 'White' and CovidData_ToBeUsed.Ethnicity.loc[i] == 'Non Hispanic':
+            RaceEthnicity.loc[i]['WhiteNonHispanic'] = 1
+            RaceEthnicity.loc[i]['NonWhiteNonHispanic'] = 0
+            RaceEthnicity.loc[i]['AnyRaceHispanic'] = 0
+            RaceEthnicity.loc[i]['AnyRaceOtherEthnicity'] = 0
+        elif (CovidData_ToBeUsed.Race.loc[i] == 'Asian' or CovidData_ToBeUsed.Race.loc[i] == 'Black' or CovidData_ToBeUsed.Race.loc[i] == 'OtherRace') and CovidData_ToBeUsed.Ethnicity.loc[i] == 'Non Hispanic':
+            RaceEthnicity.loc[i]['WhiteNonHispanic'] = 0
+            RaceEthnicity.loc[i]['NonWhiteNonHispanic'] = 1
+            RaceEthnicity.loc[i]['AnyRaceHispanic'] = 0
+            RaceEthnicity.loc[i]['AnyRaceOtherEthnicity'] = 0
+        elif (CovidData_ToBeUsed.Race.loc[i] == 'Asian' or CovidData_ToBeUsed.Race.loc[i] == 'White' or CovidData_ToBeUsed.Race.loc[i] == 'Black' or CovidData_ToBeUsed.Race.loc[i] == 'OtherRace') and CovidData_ToBeUsed.Ethnicity.loc[i] == 'Hispanic':
+            RaceEthnicity.loc[i]['WhiteNonHispanic'] = 0
+            RaceEthnicity.loc[i]['NonWhiteNonHispanic'] = 0
+            RaceEthnicity.loc[i]['AnyRaceHispanic'] = 1
+            RaceEthnicity.loc[i]['AnyRaceOtherEthnicity'] = 0
+        elif (CovidData_ToBeUsed.Race.loc[i] == 'Asian' or CovidData_ToBeUsed.Race.loc[i] == 'White' or CovidData_ToBeUsed.Race.loc[i] == 'Black' or CovidData_ToBeUsed.Race.loc[i] == 'OtherRace') and CovidData_ToBeUsed.Ethnicity.loc[i] == 'OtherEthnicity':
+            RaceEthnicity.loc[i]['WhiteNonHispanic'] = 0
+            RaceEthnicity.loc[i]['NonWhiteNonHispanic'] = 0
+            RaceEthnicity.loc[i]['AnyRaceHispanic'] = 0
+            RaceEthnicity.loc[i]['AnyRaceOtherEthnicity'] = 1
+    CovidData_ToBeUsed = pd.concat([CovidData_ToBeUsed, RaceEthnicity], axis=1)
+    
+    # In[]: FirstImmunizationNM
+    CovidData_ToBeUsed['FirstImmunizationID'] = CovidData_ToBeUsed['FirstImmunizationID'].astype(int)
+    CovidData_ToBeUsed['Pfizer'] = CovidData_ToBeUsed.FirstImmunizationID[CovidData_ToBeUsed.FirstImmunizationID == 245]
+    CovidData_ToBeUsed.Pfizer[CovidData_ToBeUsed.Pfizer != 245] = 0
+    CovidData_ToBeUsed.Pfizer[CovidData_ToBeUsed.Pfizer == 245] = 1
+    CovidData_ToBeUsed['Moderna'] = CovidData_ToBeUsed.FirstImmunizationID[CovidData_ToBeUsed.FirstImmunizationID == 244]
+    CovidData_ToBeUsed.Moderna[CovidData_ToBeUsed.Moderna != 244] = 0
+    CovidData_ToBeUsed.Moderna[CovidData_ToBeUsed.Moderna == 244] = 1
+    CovidData_ToBeUsed['Janssen'] = CovidData_ToBeUsed.FirstImmunizationID[CovidData_ToBeUsed.FirstImmunizationID == 251]
+    CovidData_ToBeUsed.Janssen[CovidData_ToBeUsed.Janssen != 251] = 0
+    CovidData_ToBeUsed.Janssen[CovidData_ToBeUsed.Janssen == 251] = 1
+    
+    # In[]: Covid positive/diagnosis relative to dose 1 categorized into (0-14, 15-28, 29-168, and >168 day) intervals
+    CovidData_ToBeUsed['AnyCOVIDPosDiagBeforeDose1'] = 2
+    CovidData_ToBeUsed.AnyCOVIDPosDiagBeforeDose1[CovidData_ToBeUsed.COVIDPositiveBeforeDose1 != '.'] = 1
+    CovidData_ToBeUsed.AnyCOVIDPosDiagBeforeDose1[CovidData_ToBeUsed.COVIDPositiveBeforeDose1 == '.'] = 0
+    def IntervalsForCOVIDDiagPosi (Data, NewColumn, PreColumn, int1, int2):
+        Data[NewColumn] = Data[PreColumn]
+        for i in range(len(Data)):
+            if (pd.to_numeric(Data[NewColumn].loc[i]) >= int1) and (pd.to_numeric(Data[NewColumn].loc[i]) < int2):
+                Data[NewColumn].loc[i] = 1
+            else:
+                Data[NewColumn].loc[i] = 0
+        return Data
+    CovidData_ToBeUsed.COVIDPositiveBeforeDose1[CovidData_ToBeUsed.COVIDPositiveBeforeDose1 == '.'] = -1
+    CovidData_ToBeUsed['COVIDPositiveBeforeDose1'] = CovidData_ToBeUsed['COVIDPositiveBeforeDose1'].astype(int)
+    CovidData_ToBeUsed = IntervalsForCOVIDDiagPosi(CovidData_ToBeUsed, 'COVIDPosDiag0to14DaysBeforeDose1', 'COVIDPositiveBeforeDose1', 0, 15)
+    CovidData_ToBeUsed = IntervalsForCOVIDDiagPosi(CovidData_ToBeUsed, 'COVIDPosDiag15to28DaysBeforeDose1', 'COVIDPositiveBeforeDose1', 15, 29)
+    CovidData_ToBeUsed = IntervalsForCOVIDDiagPosi(CovidData_ToBeUsed, 'COVIDPosDiag29to168DaysBeforeDose1', 'COVIDPositiveBeforeDose1', 29, 169)
+    CovidData_ToBeUsed = IntervalsForCOVIDDiagPosi(CovidData_ToBeUsed, 'COVIDPosDiagMoreThan169DaysBeforeDose1', 'COVIDPositiveBeforeDose1', 169, 
+                                                   CovidData_ToBeUsed.COVIDPositiveBeforeDose1.max()+1)
+    
+    CovidData_ToBeUsed.COVIDPositiveBetweenDose12[CovidData_ToBeUsed.COVIDPositiveBetweenDose12 == '.'] = -1
+    CovidData_ToBeUsed['COVIDPositiveBetweenDose12'] = CovidData_ToBeUsed['COVIDPositiveBetweenDose12'].astype(int)
+    def IntervalsForCOVIDDiagPosiAfterDose (Data, NewColumn, PreColumn, int1, int2):
+        Data[NewColumn] = Data[PreColumn]
+        for i in range(len(Data)):
+            if (pd.to_numeric(Data[NewColumn].loc[i]) >= int1) and (pd.to_numeric(Data[NewColumn].loc[i]) < int2):
+                Data[NewColumn].loc[i] = 1
+            else:
+                Data[NewColumn].loc[i] = 0
+        return Data
+    CovidData_ToBeUsed = IntervalsForCOVIDDiagPosiAfterDose(CovidData_ToBeUsed, 'COVIDPosDiag0to7DaysAfterDose1', 'COVIDPositiveBetweenDose12', 0, 7)
+    
+    # In[]: diagnises (Anaphylaxis, Thrombosis, MyocardialInfarction and Stroke), medication (Epipen)
+    CovidData_ToBeUsed.AnaphylaxisBeforeDose1[CovidData_ToBeUsed.AnaphylaxisBeforeDose1 != '.'] = 1
+    CovidData_ToBeUsed.AnaphylaxisBeforeDose1[CovidData_ToBeUsed.AnaphylaxisBeforeDose1 == '.'] = 0
+    CovidData_ToBeUsed.ThrombosisBeforeDose1[CovidData_ToBeUsed.ThrombosisBeforeDose1 != '.'] = 1
+    CovidData_ToBeUsed.ThrombosisBeforeDose1[CovidData_ToBeUsed.ThrombosisBeforeDose1 == '.'] = 0
+    CovidData_ToBeUsed.MyocardialInfarctionBeforeDose1[CovidData_ToBeUsed.MyocardialInfarctionBeforeDose1 != '.'] = 1
+    CovidData_ToBeUsed.MyocardialInfarctionBeforeDose1[CovidData_ToBeUsed.MyocardialInfarctionBeforeDose1 == '.'] = 0
+    CovidData_ToBeUsed.StrokeBeforeDose1[CovidData_ToBeUsed.StrokeBeforeDose1 != '.'] = 1
+    CovidData_ToBeUsed.StrokeBeforeDose1[CovidData_ToBeUsed.StrokeBeforeDose1 == '.'] = 0
+    CovidData_ToBeUsed['Medications-Epipen'][CovidData_ToBeUsed['Medications-Epipen'] != '.'] = 1
+    CovidData_ToBeUsed['Medications-Epipen'][CovidData_ToBeUsed['Medications-Epipen'] == '.'] = 0
+    
+    # In[]: 'FirstImmunizationTime','FirstDoseAppointmentTime'; morning (600 am–1059 am), midday (1100 am- 1559) or late afternoon (1600 -2159)
+    time_0 = datetime.time(0, 0)
+    time_01 = datetime.time(5, 0)
+    time_1 = datetime.time(6, 0)
+    time_2 = datetime.time(11, 0)
+    time_3 = datetime.time(16, 0)
+    time_4 = datetime.time(22, 0)
+    DummyTime = pd.DataFrame(index=range(len(CovidData_ToBeUsed)), columns=['time','time_1','time_2','time_3'])
+    for i in range(len(CovidData_ToBeUsed)):
+        FirstImmunizationTime_ = datetime.datetime.strptime(CovidData_ToBeUsed.loc[i]['FirstImmunizationTime'], '%H:%M').time()
+        if FirstImmunizationTime_ == time_0:   # if FirstDoseAppointmentTime is midnight, then use FirstDoseAppointmentTime
+            FirstImmunizationTime_ = datetime.datetime.strptime(CovidData_ToBeUsed.loc[i]['FirstDoseAppointmentTime'], '%H:%M').time()
+        if (FirstImmunizationTime_ > time_0 and FirstImmunizationTime_ < time_01):   # fixing an error (AM/PM) in FirstImmunizationTime and FirstDoseAppointmentTime for 8 participants
+            FirstImmunizationTime_ = (pd.to_datetime(FirstImmunizationTime_,format='%H:%M:%S') + datetime.timedelta(minutes = 0, hours = 12)).time()
+        # DummyTime.loc[i]['hashId'] = CovidData_ToBeUsed.loc[i]['hashId']
+        DummyTime.loc[i]['time'] = FirstImmunizationTime_.hour
+        if FirstImmunizationTime_ >= time_1  and FirstImmunizationTime_ < time_2:
+            DummyTime.loc[i]['time_1'] = 1
+        else:
+            DummyTime.loc[i]['time_1'] = 0
+        if FirstImmunizationTime_>= time_2  and FirstImmunizationTime_ < time_3:
+            DummyTime.loc[i]['time_2'] = 1
+        else:
+            DummyTime.loc[i]['time_2'] = 0
+        if FirstImmunizationTime_>= time_3  and FirstImmunizationTime_ < time_4:
+            DummyTime.loc[i]['time_3'] = 1
+        else:
+            DummyTime.loc[i]['time_3'] = 0
+        
+    DummyTime_ = DummyTime[['time_1','time_2','time_3']]
+    DummyTime['TimeCheck'] = DummyTime_.sum(axis=1)
+    CovidData_ToBeUsed = pd.concat([CovidData_ToBeUsed, DummyTime], axis=1, ignore_index=False)
+    CovidData_ToBeUsed = CovidData_ToBeUsed[CovidData_ToBeUsed.TimeCheck == 1]
+    CovidData_ToBeUsed = CovidData_ToBeUsed.reset_index(drop=True)
+    return CovidData_ToBeUsed

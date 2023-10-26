@@ -1,0 +1,338 @@
+import warnings
+warnings.filterwarnings('ignore')
+
+'''
+this script uses EHR data for ML analysis 
+'''
+# In[]: to Avoid .pyc Files
+import sys
+sys.dont_write_bytecode = True
+
+# In[]: importing functions from libraries
+import pandas as pd
+import numpy as np
+from sklearn.metrics import classification_report
+from imblearn.over_sampling import RandomOverSampler
+from imblearn.under_sampling import RandomUnderSampler
+from xgboost import XGBClassifier
+from matplotlib import pyplot as plt
+import shap
+from numpy import mean
+from numpy import std
+from scipy.stats import gmean
+from sklearn.model_selection import RepeatedStratifiedKFold
+from sklearn.metrics import precision_score, confusion_matrix, f1_score,recall_score,roc_auc_score,matthews_corrcoef
+from sklearn.linear_model import LogisticRegression
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.ensemble import ExtraTreesClassifier
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.dummy import DummyClassifier
+  
+# In[]: import data, combine COVIDPositiveBeforeDose1 and COVIDDiagnosesBeforeDose1 columns
+user = 'srabb'  # srabb, si124
+### Allergic symptoms-------------------
+CovidData_ToBeUsed1 = pd.read_csv('C:/Users/'+ user +'/Data/DataToBeUsedForML/AllergyDataDose1Day1_ToBeUsedForML_22-06-03.csv')
+CovidData_ToBeUsed2 = pd.read_csv('C:/Users/'+ user +'/Data/DataToBeUsedForML/AllergyDataDose1Day2_ToBeUsedForML_22-06-03.csv')
+CovidData_ToBeUsed3 = pd.read_csv('C:/Users/'+ user +'/Data/DataToBeUsedForML/AllergyDataDose1Day3_ToBeUsedForML_22-06-03.csv')
+
+# In[]:
+DoseDay = 'Dose1Day123'
+SideEffect = 'Allergy'
+SideEffect_ = 'AnyAllergy'
+Symps = 'Any Allergic symptoms'
+
+# In[]: merging the data for 3 days
+MergeCol = list(CovidData_ToBeUsed1.columns)[:29]
+CovidData_ToBeUsed = pd.merge(CovidData_ToBeUsed1, CovidData_ToBeUsed2, left_on = MergeCol, right_on = MergeCol, how='outer')
+CovidData_ToBeUsed = pd.merge(CovidData_ToBeUsed, CovidData_ToBeUsed3, left_on = MergeCol, right_on = MergeCol, how='inner')
+### rename some columns
+CovidData_ToBeUsed = CovidData_ToBeUsed.rename(columns={"Sex_Female": "Sex",
+                                                        "WhiteNonHispanic": "White Non-Hispanic",
+                                                        "NonWhiteNonHispanic": "Non-White Non-Hispanic",
+                                                        "AnyRaceHispanic": "Any Race Hispanic",
+                                                        "AnyRaceOtherEthnicity": "Any Race Other Ethnicity",
+                                                        "Medications-Epipen": "Medication: Epinephrine self injection",
+                                                        'AnyCOVIDPosDiagBeforeDose1': 'Any Prior COVID Diagnosis',
+                                                        "time_1": "06-11H",
+                                                        "time_2": "11-16H",
+                                                        "time_3": "16-22H"
+                                                        })
+
+# In[]: Choose features
+featureColumn = ['Age',
+                 'Sex',
+                 'Pfizer',
+                 '06-11H','11-16H','16-22H',
+                 'White Non-Hispanic','Non-White Non-Hispanic','Any Race Hispanic','Any Race Other Ethnicity',
+                 'Medication: Epinephrine self injection',
+                 'Any Prior COVID Diagnosis'                  
+                 ]
+# In[]: Choose targets
+TargetColumn = list(CovidData_ToBeUsed.columns)[29:]
+
+# In[]: Allergen / allergy history data
+Allergen_Vaccinated_Hashed = pd.read_csv('C:/Users/'+ user +'/Data/DataToBeUsedForML/Allergen_Vaccinated_Hashed_22-03-14.csv')
+Allergen_Categories = pd.read_csv('C:/Users/'+ user +'/Data/DataToBeUsedForML/RPDR_Allergen_22-03-14.csv')
+Comments_Categories = pd.read_csv('C:/Users/'+ user +'/Data/DataToBeUsedForML/RPDR_Allergen_Comments_2022-03-15.csv',encoding='latin1')
+
+Allergen_Vaccinated_Hashed = pd.merge(Allergen_Vaccinated_Hashed, Allergen_Categories[['Allergen','Categories']], on = 'Allergen', how='left')
+Allergen_Vaccinated_Hashed = pd.merge(Allergen_Vaccinated_Hashed, Comments_Categories[['Comments','Categories1', 'Categories2', 'Categories3']], on = 'Comments', how='left')
+Allergen_Vaccinated_Hashed = Allergen_Vaccinated_Hashed.dropna(subset=['hashId']).reset_index(drop=True) # drop empty hashIds
+Allergen_Vaccinated_Hashed = Allergen_Vaccinated_Hashed[Allergen_Vaccinated_Hashed.Status == 'Active'] # only keep allergies with Active status
+
+def AllergyType (data1, column1, data2):
+    data1[column1][data2 == 'animal'] = 'seasonal'
+    data1[column1][data2 == '.'] = 'others'
+    data1[column1][data2 == 'metal'] = 'others'
+    data1[column1][data2 == 'topical'] = 'others'
+    data3 = pd.get_dummies(data1[column1])  # create dummy variables for allergy categories
+    data4 = pd.concat([data1[['hashId']], data3],axis=1)
+    return data4
+
+Allergen_Categories_Hashed = AllergyType (Allergen_Vaccinated_Hashed, 'Categories', Allergen_Vaccinated_Hashed.Categories)
+Allergen_Categories_Hashed1 = AllergyType (Allergen_Vaccinated_Hashed, 'Categories1', Allergen_Vaccinated_Hashed.Categories1)
+Allergen_Categories_Hashed2 = AllergyType (Allergen_Vaccinated_Hashed, 'Categories2', Allergen_Vaccinated_Hashed.Categories2)
+Allergen_Categories_Hashed3 = AllergyType (Allergen_Vaccinated_Hashed, 'Categories3', Allergen_Vaccinated_Hashed.Categories3)
+
+Allergen_Categories_Hashed = pd.concat([Allergen_Categories_Hashed, Allergen_Categories_Hashed1],axis=0)
+Allergen_Categories_Hashed = pd.concat([Allergen_Categories_Hashed, Allergen_Categories_Hashed3],axis=0)
+Allergen_Categories_Hashed = pd.concat([Allergen_Categories_Hashed, Allergen_Categories_Hashed3],axis=0)
+
+# merge multiple records of individials into one record
+Allergen_Categories_Hashed_ = Allergen_Categories_Hashed.groupby('hashId')['food','vaccine','medications','insect stings','seasonal','latex','others'].sum().astype(int)
+Allergen_Categories_Hashed_[Allergen_Categories_Hashed_ != 0] = 1 # if more than one record for a group, set it to 1
+Allergen_Categories_Hashed_['Count_Allergen'] = Allergen_Categories_Hashed_[['food','vaccine','medications','insect stings','seasonal','latex']].sum(axis=1) # count number of allergies
+Allergen_Categories_Hashed_ = Allergen_Categories_Hashed_.reset_index()
+
+# merge COVID data and Allergen data
+CovidData_ToBeUsed_allergy = pd.merge(CovidData_ToBeUsed,
+                              Allergen_Categories_Hashed_[['hashId','food','vaccine','medications','insect stings','seasonal','latex','others','Count_Allergen']],  
+                              on = 'hashId', how='left')
+CovidData_ToBeUsed_allergy = CovidData_ToBeUsed_allergy.fillna(0)
+
+CovidData_ToBeUsed_allergy = CovidData_ToBeUsed_allergy.rename(columns={'food': 'Allergy_food',
+                                           'vaccine': 'Allergy_vaccine',
+                                           'medications': 'Allergy_medication',
+                                           'insect stings': 'Allergy_InsectSting',
+                                           'seasonal':'Allergy_seasonal',
+                                           'latex':'Allergy_latex',
+                                           'others':'Allergy_other',
+                                           'Count_Allergen':'Number of Allergy Categories'})
+# Adding the allerdy data as features
+featureColumn = ['Number of Allergy Categories'] + featureColumn
+
+# In[]: Remove Janssen data; remove the patients with COVID diagnosis within 7 days after vaccination
+CovidData_ToBeUsed_allergy = CovidData_ToBeUsed_allergy[CovidData_ToBeUsed_allergy.Janssen != 1].reset_index(drop=True)
+CovidData_ToBeUsed_allergy = CovidData_ToBeUsed_allergy[CovidData_ToBeUsed_allergy.COVIDPosDiag0to7DaysAfterDose1 != 1].reset_index(drop=True)
+FeatureTargetColumn = featureColumn + TargetColumn
+CovidData_ToBeUsed_allergy = CovidData_ToBeUsed_allergy[FeatureTargetColumn]
+
+# In[]: separate features and targets
+X = CovidData_ToBeUsed_allergy[featureColumn]
+y = CovidData_ToBeUsed_allergy[TargetColumn]
+featureColumn = np.reshape(featureColumn, (-1, 1))
+
+# In[]: Target; Up/Down sampling the data for imbalanced dataset
+### Allergic reactions ------------------
+y = y.replace('.', -1).astype('int64')
+y_new = pd.DataFrame(index=range(len(y)), columns=['AllergyAll'])
+y_new['AllergyAll']= 0
+for i in range(len(y)):
+    y_row = y.iloc[i].unique().tolist()
+    if 1 in y_row:
+        y_new['AllergyAll'].iloc[i] = 1
+    elif -1 in y_row:
+        y_new['AllergyAll'].iloc[i] = -1
+y['AllergyAll'] = y_new['AllergyAll']
+X = X[y.AllergyAll != -1]
+y = y[y.AllergyAll != -1]
+
+print(np.unique(y['AllergyAll'], return_counts=True))
+
+# In[]: Up and down sampling
+def UpDownsampling(X, y, strategy):
+    over = RandomOverSampler(sampling_strategy=strategy)
+    under = RandomUnderSampler(sampling_strategy='majority')
+    X, y = over.fit_resample(X, y)
+    X, y = under.fit_resample(X, y)
+    return X,y
+
+# In[]: spliting test and train, resample training set
+kfolds = RepeatedStratifiedKFold(n_splits=5, n_repeats=10, random_state=1)
+def score_model(model):
+    FScore_micro = []
+    FScore_weighted = []
+    Recall_weighted = []
+    Precision_weighted = []
+    Gmean_ = []
+    Recall = []
+    for ind,(ind_train,ind_val) in (enumerate (kfolds.split(X,y['AllergyAll']))):
+        X_train,X_val = X.iloc[ind_train],X.iloc[ind_val] 
+        y_train,y_val = y['AllergyAll'].iloc[ind_train],y['AllergyAll'].iloc[ind_val]
+        X_train, y_train = UpDownsampling(X_train, y_train, strategy='minority')
+        model_obj = model.fit(X_train,y_train)
+        ### Allergic reactions ------------------
+        val_pred = model_obj.predict(X_val)
+        ### Non-allergic reactions ------------------
+        matrix = confusion_matrix(y_val, val_pred)
+        print('confusion_matrix:', matrix)
+        print(classification_report(y_val, val_pred))
+        precision_weighted = precision_score(y_val, val_pred, average='weighted')
+        # print('precision_weighted: %.3f' % precision_weighted)
+        recall_weighted = recall_score(y_val, val_pred, average='weighted')
+        # print('recall_weighted: %.3f' % recall_weighted)
+        auc = roc_auc_score(y_val, val_pred, average='weighted')
+        print('auc: %.3f' % auc)
+        # MCC = matthews_corrcoef(y_val, val_pred)
+        # print('matthews_corrcoef: %.3f' % MCC)
+        fScore_micro = f1_score(y_val, val_pred, average='micro')
+        fScore_weighted = f1_score(y_val, val_pred, average='weighted')
+        # print('micro fScore: %.3f' % fScore_micro)
+        # print('weighted fScore: %.3f' % fScore_weighted)
+        recall_0 = recall_score(y_val, val_pred, pos_label=0)
+        recall_1 = recall_score(y_val, val_pred, pos_label=1)
+        recall = (recall_0 + recall_1)/2
+        # print('recall: ', recall)
+        FScore_micro.append(fScore_micro)
+        FScore_weighted.append(fScore_weighted)
+        Recall_weighted.append(recall_weighted)
+        Precision_weighted.append(precision_weighted)
+        Recall.append(recall)
+    return FScore_micro, FScore_weighted, Recall_weighted, Precision_weighted, Gmean_, Recall
+
+# In[]: get a list of models to evaluate
+def get_models():
+    models = dict()
+    # models['Dummy'] = DummyClassifier(strategy='stratified') # Baseline for Machine Learning Models
+    # models['LogR'] = LogisticRegression(solver='liblinear')
+    # models['LDA'] = LinearDiscriminantAnalysis()
+    # models['KNN'] = KNeighborsClassifier()
+    # models['SVM'] = SVC(kernel='rbf')
+    # models['GNB'] = GaussianNB()
+    # models['MLP'] = MLPClassifier(max_iter=1000)
+    # models['DT'] = DecisionTreeClassifier()
+    # models['RF'] = RandomForestClassifier(criterion='gini', max_depth=None)
+    # models['HGB'] = HistGradientBoostingClassifier(min_samples_leaf=1,max_depth=6,learning_rate=1,max_iter=100)
+    # models['XT'] = ExtraTreesClassifier(max_depth=None,min_samples_split=2)
+    models['XGB'] = XGBClassifier(max_depth=3,
+                          n_estimators=50,
+                          learning_rate=0.1,
+                          #class_weight='balanced',
+                          colsample_bytree=0.85,
+                          colsample_bylevel=0.85,
+                          colsample_bynode=0.85,
+                          use_label_encoder=False)
+    return models
+
+# In[]: get the models to evaluate
+models = get_models()
+results1, results2, results3, results4, results5, results6, names = list(), list(), list(), list(), list(), list(), list()
+for name, model in models.items():
+    print('model: ', model)
+    FScore_micro, FScore_weighted, Recall_weighted, Precision_weighted, Gmean_, Recall = score_model(model)
+    results1.append(FScore_micro)
+    results2.append(FScore_weighted)
+    results3.append(Recall_weighted)
+    results4.append(Precision_weighted)
+    results5.append(Recall)
+    results6.append(Gmean_)
+    names.append(name)
+    print('> Precision_weighted %s %.3f (%.3f)' % (name, mean(Precision_weighted), std(Precision_weighted)))
+    print('> Recall_weighted %s %.3f (%.3f)' % (name, mean(Recall_weighted), std(Recall_weighted)))
+    print('> FScore_weighted %s %.3f (%.3f)' % (name, mean(FScore_weighted), std(FScore_weighted)))
+    print('> Gmean %s %.3f (%.3f)' % (name, mean(Gmean_), std(Gmean_)))
+    
+# In[]: resampling and traing the model for SHAP
+X, y = UpDownsampling(X,y['AllergyAll'], strategy='minority')
+model_XGB = XGBClassifier(max_depth=3,
+                      n_estimators=50,
+                      learning_rate=0.1,
+                      #class_weight='balanced',
+                      colsample_bytree=0.85,
+                      colsample_bylevel=0.85,
+                      colsample_bynode=0.85,
+                      use_label_encoder=False)
+model_XGB_Fitted = model_XGB.fit(X, y)
+y_pre = model_XGB_Fitted.predict(X)
+print(classification_report(y, y_pre))
+
+# In[]: post processing on shap values
+### SHAP----------------------------------------
+explainer = shap.TreeExplainer(model_XGB_Fitted)
+shap_values = explainer.shap_values(X)
+shap_values_ = explainer(X)
+   
+# In[]: SHAP plots
+# SHAP summary plot
+fig, ax = plt.subplots()
+shap.summary_plot(shap_values, X, show=False)  # SHAP Summary Plot
+ax.set_title('SHAP Summary Plot for ' + Symps + ' after ' + DoseDay)
+# SHAP feature importance plot
+fig, ax = plt.subplots()
+shap.summary_plot(shap_values, X, plot_type="bar", color='green', show=False)  # SHAP Feature importance plot
+# SHAP interaction plot
+DataCol = 'Age'
+interaction_index = 'Sex'
+fig, ax = plt.subplots()
+shapValues_AgeData = shap_values_[:,'Age'].values
+shapValues_AgeData = np.concatenate((np.reshape(shapValues_AgeData, (-1, 1)), np.reshape(np.array(X['Age']), (-1, 1))), axis=1)
+SHAP_Female = shapValues_AgeData[X.Sex == 1]
+SHAP_Male = shapValues_AgeData[X.Sex == 0]
+plt.scatter(SHAP_Female[:,1],SHAP_Female[:,0], label = 'Female', color='Green',  s = 30)
+plt.scatter(SHAP_Male[:,1], SHAP_Male[:,0], label = 'Male', facecolors='none', edgecolors='Gray', marker = 's', s = 30)
+plt.legend()
+plt.xlabel("Age")
+plt.ylabel("SHAP Value for Age")
+# SHAP scatter plot for allergy count
+DataCol = 'Number of Allergy Categories'
+shap.plots.scatter(shap_values_[:,'Number of Allergy Categories'], show=False)
+# SHAP waterfall plot
+X_age = X[X.Age == 28]
+X_ageMale = X_age[X_age.Sex == 0]
+# ## SHAP waterfall plot
+fig, ax = plt.subplots()
+shap.plots.waterfall(shap_values_[178], max_display=15, show=False)
+fig, ax = plt.subplots()
+shap.plots.waterfall(shap_values_[12741], max_display=15, show=False)
+
+# In[]: post processing on shap values    
+import seaborn as sns
+data_boxplot = []
+lenBoxplotData = shap_values.shape[1]
+for w in range(lenBoxplotData):
+    data_boxplot.append([])
+Count = 0
+for SHAPCol in range(shap_values.shape[1]):
+    if SHAPCol != 0:
+        if SHAPCol in range(2,4,1):
+            print(SHAPCol)
+            shapValues_Data = np.concatenate((np.reshape(shap_values[:,SHAPCol], (-1, 1)), np.reshape(np.array(X[featureColumn[SHAPCol,0]]), (-1, 1))), axis=1)
+            shapValues_Data_red = shapValues_Data[shapValues_Data[:,1] == 1]
+            shapValues_Data_blue = shapValues_Data[shapValues_Data[:,1] == 0]
+            data_boxplot[Count].append(shapValues_Data_red[:,0])
+            Count = Count + 1
+            data_boxplot[Count].append(shapValues_Data_blue[:,0])
+            Count = Count + 1
+        if SHAPCol in range(4,lenBoxplotData+1,1):
+            print('second')
+            print(SHAPCol)
+            shapValues_Data = np.concatenate((np.reshape(shap_values[:,SHAPCol], (-1, 1)), np.reshape(np.array(X[featureColumn[SHAPCol,0]]), (-1, 1))), axis=1)
+            shapValues_Data_red = shapValues_Data[shapValues_Data[:,1] == 1]
+            data_boxplot[Count].append(shapValues_Data_red[:,0])
+            Count = Count + 1
+fig, ax = plt.subplots(figsize=(25,25))
+ax = sns.boxplot(data=data_boxplot, orient='h', width=1, fliersize=4, linewidth = 4)
+plt.axvline(x=0, color="black", linestyle=":")
+ax.set_yticklabels(['Female','Male',
+                    'Pfizer', 'Moderna',
+                    '06-11H','11-16H', '16-22H',
+                    'White Non-Hispanic','Non-White Non-Hispanic','Any Race Hispanic','Any Race Other Ethnicity',
+                    'Medication: Epinephrine self injection',
+                    'Any Prior COVID Diagnosis'
+                    ])
+plt.xlabel("SHAP Values",fontsize = 35)
+ax.get_xaxis().tick_bottom()
+ax.get_yaxis().tick_left()
+plt.xticks(fontsize=35)
+plt.yticks(fontsize=35)

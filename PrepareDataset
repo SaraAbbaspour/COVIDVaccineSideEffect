@@ -1,0 +1,115 @@
+# importing functions from libraries
+import sys
+sys.dont_write_bytecode = True  # to Avoid .pyc Files
+import pandas as pd
+import datetime
+from PrepareDose1Dataset_3timeCategory_ForML import PrepareDose1Dataset
+
+# In[]: import data
+CovidData = pd.read_csv('C:/Users/srabb/Data/DataToBeUsedForML/COVIDPositiveDiagnosesMedsSideEffects_VaccinePatientWithHashIDs.csv')
+
+# In[]:
+ColumnsToBeUsed_1 = ['hashId','Age','AgeGroup1','AgeGroup2','AgeGroup3','Sex_Female','Sex_Male',
+                    'WhiteNonHispanic','NonWhiteNonHispanic','AnyRaceHispanic','AnyRaceOtherEthnicity',
+                    'Pfizer','Moderna','Janssen','time','time_1','time_2','time_3',
+                    'AnyCOVIDPosDiagBeforeDose1',
+                    'COVIDPosDiag0to14DaysBeforeDose1','COVIDPosDiag15to28DaysBeforeDose1','COVIDPosDiag29to168DaysBeforeDose1','COVIDPosDiagMoreThan169DaysBeforeDose1',
+                    'COVIDPosDiag0to7DaysAfterDose1',
+                    'ThrombosisBeforeDose1','MyocardialInfarctionBeforeDose1','StrokeBeforeDose1',
+                    'AnaphylaxisBeforeDose1',
+                    'Medications-Epipen']
+                               
+# In[]:
+DatasetName = ['AllergicSymptoms','NonAllergicSymptoms','COVIDSymptoms']
+Days = [1,2,3]
+
+for DN in range(len(DatasetName)):
+    for DS in range(len(Days)):
+        print(DatasetName[DN])
+        print(Days[DS])
+        if DatasetName[DN] == 'AllergicSymptoms':
+            if Days[DS] == 1:
+                CovidData_ = CovidData.rename(columns={'AllergyRashFLG_Dose1Day1': 'AllergyRashFLG', 'AllergyHivesFLG_Dose1Day1': 'AllergyHivesFLG', 'AllergySwollenFLG_Dose1Day1': 'AllergySwollenFLG',
+                                                      'AllergyWheezingFLG_Dose1Day1':'AllergyWheezingFLG'})
+            elif Days[DS] ==2:
+                CovidData_ = CovidData.rename(columns={'AllergyRashFLG_Dose1Day2': 'AllergyRashFLG', 'AllergyHivesFLG_Dose1Day2': 'AllergyHivesFLG', 'AllergySwollenFLG_Dose1Day2': 'AllergySwollenFLG',
+                                                      'AllergyWheezingFLG_Dose1Day2':'AllergyWheezingFLG'})
+            elif Days[DS] ==3:
+                CovidData_ = CovidData.rename(columns={'AllergyRashFLG_Dose1Day3': 'AllergyRashFLG', 'AllergyHivesFLG_Dose1Day3': 'AllergyHivesFLG', 'AllergySwollenFLG_Dose1Day3': 'AllergySwollenFLG',
+                                                      'AllergyWheezingFLG_Dose1Day3':'AllergyWheezingFLG'})
+            CovidData_ToBeUsed = PrepareDose1Dataset(CovidData_)
+            CovidData_ToBeUsed['AllergyRashFLG'][CovidData_ToBeUsed['AllergyRashFLG'] == 'No'] = 0
+            CovidData_ToBeUsed['AllergyRashFLG'][CovidData_ToBeUsed['AllergyRashFLG'] == 'Yes'] = 1
+            CovidData_ToBeUsed['AllergyHivesFLG'][CovidData_ToBeUsed['AllergyHivesFLG'] == 'No'] = 0
+            CovidData_ToBeUsed['AllergyHivesFLG'][CovidData_ToBeUsed['AllergyHivesFLG'] == 'Yes'] = 1
+            CovidData_ToBeUsed['AllergySwollenFLG'][CovidData_ToBeUsed['AllergySwollenFLG'] == 'No'] = 0
+            CovidData_ToBeUsed['AllergySwollenFLG'][CovidData_ToBeUsed['AllergySwollenFLG'] == 'Yes'] = 1
+            CovidData_ToBeUsed['AllergyWheezingFLG'][CovidData_ToBeUsed['AllergyWheezingFLG'] == 'No'] = 0
+            CovidData_ToBeUsed['AllergyWheezingFLG'][CovidData_ToBeUsed['AllergyWheezingFLG'] == 'Yes'] = 1
+            ColumnsToBeUsed_2 = ['AllergyRashFLG','AllergyHivesFLG', 'AllergySwollenFLG','AllergyWheezingFLG']
+            ColumnsToBeUsed = ColumnsToBeUsed_1 + ColumnsToBeUsed_2
+            CovidData_ToBeUsed = CovidData_ToBeUsed[ColumnsToBeUsed]
+            CovidData_ToBeUsed.to_csv (r'C:/Users/srabb/Dropbox (Partners HealthCare)/MGH COVID vaccine side effects/Data/DataToBeUsedForML/AllergyDataDose1Day'+ str(Days[DS]) +'_ToBeUsedForML_22-06-03.csv', index = False, header=True)
+
+        elif DatasetName[DN] == 'NonAllergicSymptoms':
+            if Days[DS] == 1:
+                CovidData_ = CovidData.rename(columns={'HeadacheDSC_Dose1Day1': 'HeadacheDSC', 'FatigueDSC_Dose1Day1': 'FatigueDSC', 'ArthralgiasDSC_Dose1Day1': 'ArthralgiasDSC',
+                                      'MyalgiasDSC_Dose1Day1':'MyalgiasDSC', 'FeverDSC_Dose1Day1':'FeverDSC'})
+            elif Days[DS] ==2:
+                CovidData_ = CovidData.rename(columns={'HeadacheDSC_Dose1Day2': 'HeadacheDSC', 'FatigueDSC_Dose1Day2': 'FatigueDSC', 'ArthralgiasDSC_Dose1Day2': 'ArthralgiasDSC',
+                                      'MyalgiasDSC_Dose1Day2':'MyalgiasDSC', 'FeverDSC_Dose1Day2':'FeverDSC'})
+            elif Days[DS] ==3:
+                CovidData_ = CovidData.rename(columns={'HeadacheDSC_Dose1Day3': 'HeadacheDSC', 'FatigueDSC_Dose1Day3': 'FatigueDSC', 'ArthralgiasDSC_Dose1Day3': 'ArthralgiasDSC',
+                                      'MyalgiasDSC_Dose1Day3':'MyalgiasDSC', 'FeverDSC_Dose1Day3':'FeverDSC'})
+            CovidData_ToBeUsed = PrepareDose1Dataset(CovidData_)
+            def DummyForTarget (CovidData_ToBeUsed,TargetColumn,Target1,Target2,Target3,Target4):
+                CovidData_ToBeUsed[TargetColumn][CovidData_ToBeUsed[TargetColumn] == Target1] = 0
+                CovidData_ToBeUsed[TargetColumn][CovidData_ToBeUsed[TargetColumn] == Target2] = 1
+                CovidData_ToBeUsed[TargetColumn][CovidData_ToBeUsed[TargetColumn] == Target3] = 1
+                CovidData_ToBeUsed[TargetColumn][CovidData_ToBeUsed[TargetColumn] == Target4] = 2
+                return CovidData_ToBeUsed
+            CovidData_ToBeUsed = DummyForTarget(CovidData_ToBeUsed,'HeadacheDSC','None','Mild','Mild/Moderate','Severe')
+            CovidData_ToBeUsed = DummyForTarget(CovidData_ToBeUsed,'FatigueDSC','None','Mild','Mild/Moderate','Severe')
+            CovidData_ToBeUsed = DummyForTarget(CovidData_ToBeUsed,'ArthralgiasDSC','None','Mild','Mild/Moderate','Severe')
+            CovidData_ToBeUsed = DummyForTarget(CovidData_ToBeUsed,'MyalgiasDSC','None','Mild','Mild/Moderate','Severe')
+            def DummyForTarget_Fever (CovidData_ToBeUsed,TargetColumn,Target1,Target2,Target3,Target4,Target5):
+                CovidData_ToBeUsed[TargetColumn][CovidData_ToBeUsed[TargetColumn] == Target1] = 0
+                CovidData_ToBeUsed[TargetColumn][CovidData_ToBeUsed[TargetColumn] == Target2] = 1
+                CovidData_ToBeUsed[TargetColumn][CovidData_ToBeUsed[TargetColumn] == Target3] = 1
+                CovidData_ToBeUsed[TargetColumn][CovidData_ToBeUsed[TargetColumn] == Target4] = 2
+                CovidData_ToBeUsed[TargetColumn][CovidData_ToBeUsed[TargetColumn] == Target5] = 2
+                return CovidData_ToBeUsed
+            CovidData_ToBeUsed = DummyForTarget_Fever(CovidData_ToBeUsed,'FeverDSC','None','Feeling feverish but temp < 100.0°F (37.8°C)','Feeling feverish but temp < 101°F (38.3°C)',
+                                                      'Fever >= 100.0°F (37.8°C)','Fever >= 101°F (38.3°C)')
+            ColumnsToBeUsed_2 = ['HeadacheDSC','FatigueDSC','ArthralgiasDSC','MyalgiasDSC','FeverDSC']
+            ColumnsToBeUsed = ColumnsToBeUsed_1 + ColumnsToBeUsed_2
+            CovidData_ToBeUsed = CovidData_ToBeUsed[ColumnsToBeUsed]
+            CovidData_ToBeUsed.to_csv (r'C:/Users/srabb/Dropbox (Partners HealthCare)/MGH COVID vaccine side effects/Data/DataToBeUsedForML/NonAllergicDataDose1Day'+ str(Days[DS]) +'_ToBeUsedForML_22-06-03.csv', index = False, header=True)
+            
+        elif DatasetName[DN] == 'COVIDSymptoms':
+            if Days[DS] == 1:
+                CovidData_ = CovidData.rename(columns={'COVIDSoreThroatFLG_Dose1Day1': 'COVIDSoreThroatFLG', 'COVIDNewCoughFLG_Dose1Day1': 'COVIDNewCoughFLG', 
+                                      'COVIDNewNasalFLG_Dose1Day1': 'COVIDNewNasalFLG','COVIDNewlossFLG_Dose1Day1':'COVIDNewlossFLG', 
+                                      'COVIDBreathFLG_Dose1Day1':'COVIDBreathFLG'})
+            elif Days[DS] ==2:
+                CovidData_ = CovidData.rename(columns={'COVIDSoreThroatFLG_Dose1Day2': 'COVIDSoreThroatFLG', 'COVIDNewCoughFLG_Dose1Day2': 'COVIDNewCoughFLG', 
+                                      'COVIDNewNasalFLG_Dose1Day2': 'COVIDNewNasalFLG','COVIDNewlossFLG_Dose1Day2':'COVIDNewlossFLG', 
+                                      'COVIDBreathFLG_Dose1Day2':'COVIDBreathFLG'})
+            elif Days[DS] ==3:
+                CovidData_ = CovidData.rename(columns={'COVIDSoreThroatFLG_Dose1Day3': 'COVIDSoreThroatFLG', 'COVIDNewCoughFLG_Dose1Day3': 'COVIDNewCoughFLG', 
+                                        'COVIDNewNasalFLG_Dose1Day3': 'COVIDNewNasalFLG','COVIDNewlossFLG_Dose1Day3':'COVIDNewlossFLG', 
+                                        'COVIDBreathFLG_Dose1Day3':'COVIDBreathFLG'})
+            CovidData_ToBeUsed = PrepareDose1Dataset(CovidData_)
+            def DummyForTarget (CovidData_ToBeUsed,TargetColumn,Target1,Target2):
+                CovidData_ToBeUsed[TargetColumn][CovidData_ToBeUsed[TargetColumn] == Target1] = 0
+                CovidData_ToBeUsed[TargetColumn][CovidData_ToBeUsed[TargetColumn] == Target2] = 1
+                return CovidData_ToBeUsed
+            CovidData_ToBeUsed = DummyForTarget(CovidData_ToBeUsed,'COVIDSoreThroatFLG','No','Yes')
+            CovidData_ToBeUsed = DummyForTarget(CovidData_ToBeUsed,'COVIDNewCoughFLG','No','Yes')
+            CovidData_ToBeUsed = DummyForTarget(CovidData_ToBeUsed,'COVIDNewNasalFLG','No','Yes')
+            CovidData_ToBeUsed = DummyForTarget(CovidData_ToBeUsed,'COVIDNewlossFLG','No','Yes')
+            CovidData_ToBeUsed = DummyForTarget(CovidData_ToBeUsed,'COVIDBreathFLG','No','Yes')
+            ColumnsToBeUsed_2 = ['COVIDSoreThroatFLG','COVIDNewCoughFLG','COVIDNewNasalFLG','COVIDNewlossFLG','COVIDBreathFLG']
+            ColumnsToBeUsed = ColumnsToBeUsed_1 + ColumnsToBeUsed_2
+            CovidData_ToBeUsed = CovidData_ToBeUsed[ColumnsToBeUsed]
+            CovidData_ToBeUsed.to_csv (r'C:/Users/srabbData/DataToBeUsedForML/CovidSympDataDose1Day'+ str(Days[DS]) +'_ToBeUsedForML.csv', index = False, header=True)
